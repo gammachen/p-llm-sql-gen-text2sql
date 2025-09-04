@@ -10,6 +10,7 @@ import json
 import os
 from tqdm import tqdm
 from translation_service import Translation
+from convert_schema_compatible import convert_schema_to_jsonl_compatible
 
 
 class DusqlDataSet:
@@ -41,8 +42,18 @@ class DusqlDataSet:
         """
         # 调用翻译服务进行翻译
         result = self.translation.translate(text)
+        
+        # 处理翻译结果可能是列表的情况
+        if isinstance(result, list):
+            if len(result) > 0:
+                translated_text = result[0]
+            else:
+                translated_text = str(text)  # 如果没有结果，返回原文本的字符串形式
+        else:
+            translated_text = str(result)
+            
         # 清理翻译结果，去除句号，替换点号和逗号为空格，最后用下划线连接
-        en_query = result.strip(".").replace(".", " ").replace(",", " ")
+        en_query = translated_text.strip(".").replace(".", " ").replace(",", " ")
         en_query = en_query.replace(" ", "_")
         return en_query
 
@@ -85,7 +96,7 @@ class DusqlDataSet:
             return type_dict[col_type]
         return "VARCHAR(50)"
 
-    def get_sqlite(self):
+    def get_sqlite(self, new_schema_path: str = "new_schema.jsonl"):
         """
         从new_schema.jsonl文件中读取并生成SQLite数据库模式
         
@@ -94,7 +105,7 @@ class DusqlDataSet:
         """
         result = {}
         # 读取new_schema.jsonl文件
-        with open(os.path.join(self.home_path, "new_schema.jsonl"), "r", encoding="utf-8") as f:
+        with open(os.path.join(self.home_path, new_schema_path), "r", encoding="utf-8") as f:
             for line in f:
                 whole_sql_info = []
                 sample = json.loads(line)
@@ -143,49 +154,128 @@ class DusqlDataSet:
                 }
         return result
 
-    def trans_schema(self):
+    def trans_schema(self, db_schema_path: str = "db_schema.json"):
         """
         转换数据库模式，将中文字段翻译为英文
         
         Returns:
             list: 包含所有数据库模式信息的列表
         """
+        print(f"[DEBUG] 开始转换数据库模式，使用文件: {db_schema_path}")
+        
         # 加载数据库模式数据
-        db_schema = self.load_data(os.path.join(self.home_path, "db_schema.json"))
+        db_schema_path_full = os.path.join(self.home_path, db_schema_path)
+        print(f"[DEBUG] 完整文件路径: {db_schema_path_full}")
+        
+        if not os.path.exists(db_schema_path_full):
+            print(f"[ERROR] 文件不存在: {db_schema_path_full}")
+            return []
+            
+        db_schema = self.load_data(db_schema_path_full)
+        print(f"[DEBUG] 成功加载数据库模式，数据类型: {type(db_schema)}, 长度: {len(db_schema)}")
+        
+        if not isinstance(db_schema, list):
+            print(f"[ERROR] 期望db_schema.json是列表格式，但得到: {type(db_schema)}")
+            return []
+            
         new_schema = []
         
         # 遍历每个数据库
-        for one_db in tqdm(db_schema):
-            db_id = one_db['db_id']
+        for idx, one_db in enumerate(tqdm(db_schema, desc="处理数据库")):
+            if not isinstance(one_db, dict):
+                print(f"[WARNING] 跳过非字典项: {type(one_db)}")
+                continue
+                
+            db_id = one_db.get('db_id', f'unknown_{idx}')
+            print(f"[DEBUG] 处理第 {idx+1} 个数据库: {db_id}")
+            
+            # 调试：打印原始数据结构
+            print(f"[DEBUG] 数据库 {db_id} 原始数据:")
+            print(f"  - table_names: {len(one_db.get('table_names', []))} 个表")
+            print(f"  - column_names: {len(one_db.get('column_names', []))} 个列")
+            print(f"  - column_types: {len(one_db.get('column_types', []))} 个类型")
+            print(f"  - foreign_keys: {len(one_db.get('foreign_keys', []))} 个外键")
+            
             table_info = {}
             column_en = {}
             table_en = {}
             
             # 处理每个列信息（从索引1开始跳过第一个）
-            for i, column_info in enumerate(tqdm(one_db['column_names'][1:])):
-                table_id, column_name = column_info
-                # 翻译列名
-                column_name_en = self.translation_service(column_name)
-                column_en[column_name] = column_name_en
-                column_type = one_db['column_types'][i]
-                table_name = one_db['table_names'][table_id]
-                # 翻译表名
-                table_name_en = self.translation_service(table_name)
-                table_en[table_name] = table_name_en
-                # 将列信息添加到对应表中
-                if table_name in table_info:
-                    table_info[table_name].append([column_name, column_type])
-                else:
-                    table_info[table_name] = [[column_name, column_type]]
+            column_names = one_db.get('column_names', [])
+            column_types = one_db.get('column_types', [])
+            
+            if len(column_names) <= 1:
+                print(f"[WARNING] 数据库 {db_id} 列信息不足，跳过")
+                continue
+                
+            print(f"[DEBUG] 数据库 {db_id} 开始处理列信息...")
+            
+            for i, column_info_item in enumerate(tqdm(one_db['column_names'][1:], desc=f"处理列 {db_id}")):
+                if len(column_info_item) < 2:
+                    print(f"[WARNING] 数据库 {db_id} 列信息格式错误: {column_info_item}")
+                    continue
+                    
+                table_id, column_name = column_info_item
+                
+                try:
+                    # 翻译列名
+                    column_name_en = self.translation_service(column_name)
+                    print(f"[INFO] 翻译列名: {column_name} -> {column_name_en}")
+                    column_en[column_name] = column_name_en
+                    
+                    # 获取列类型
+                    if i < len(column_types):
+                        column_type = column_types[i]
+                    else:
+                        print(f"[WARNING] 数据库 {db_id} 列类型索引越界: {i}")
+                        column_type = "text"
+                    
+                    # 获取表名
+                    if table_id < len(one_db['table_names']):
+                        table_name = one_db['table_names'][table_id]
+                    else:
+                        print(f"[WARNING] 数据库 {db_id} 表名索引越界: {table_id}")
+                        continue
+                    
+                    # 翻译表名
+                    table_name_en = self.translation_service(table_name)
+                    print(f"[INFO] 翻译表名: {table_name} -> {table_name_en}")
+                    table_en[table_name] = table_name_en
+                    
+                    # 将列信息添加到对应表中
+                    if table_name in table_info:
+                        table_info[table_name].append([column_name, column_type])
+                    else:
+                        table_info[table_name] = [[column_name, column_type]]
+                        
+                except Exception as e:
+                    print(f"[ERROR] 处理数据库 {db_id} 列时出错: {e}")
+                    continue
+            
+            print(f"[DEBUG] 数据库 {db_id} 处理外键关联信息...")
             
             # 处理外键关联信息
-            foreign_keys = one_db["foreign_keys"]
+            foreign_keys = one_db.get("foreign_keys", [])
             joined_info = []
+            
             for keys in foreign_keys:
-                a, b = one_db['column_names'][keys[0]], one_db['column_names'][keys[1]]
-                table_name_a, column_name_a = one_db['table_names'][a[0]], a[1]
-                table_name_b, column_name_b = one_db['table_names'][b[0]], b[1]
-                joined_info.append(([table_name_a, column_name_a], [table_name_b, column_name_b]))
+                try:
+                    if len(keys) != 2:
+                        print(f"[WARNING] 数据库 {db_id} 外键格式错误: {keys}")
+                        continue
+                        
+                    a, b = one_db['column_names'][keys[0]], one_db['column_names'][keys[1]]
+                    if len(a) < 2 or len(b) < 2:
+                        print(f"[WARNING] 数据库 {db_id} 外键列信息格式错误: {a}, {b}")
+                        continue
+                        
+                    table_name_a, column_name_a = one_db['table_names'][a[0]], a[1]
+                    table_name_b, column_name_b = one_db['table_names'][b[0]], b[1]
+                    joined_info.append(([table_name_a, column_name_a], [table_name_b, column_name_b]))
+                    
+                except Exception as e:
+                    print(f"[ERROR] 处理数据库 {db_id} 外键时出错: {e}")
+                    continue
             
             # 构建完整的模式信息
             schema_info = {
@@ -195,7 +285,16 @@ class DusqlDataSet:
                 "column_en": column_en, 
                 "table_en": table_en
             }
+            
+            print(f"[DEBUG] 数据库 {db_id} 处理完成:")
+            print(f"  - table_info: {len(table_info)} 个表")
+            print(f"  - column_en: {len(column_en)} 个列")
+            print(f"  - table_en: {len(table_en)} 个表名")
+            print(f"  - joined_info: {len(joined_info)} 个关联")
+            
             new_schema.append(schema_info)
+            
+        print(f"[DEBUG] 转换完成，共处理 {len(new_schema)} 个数据库")
         return new_schema
 
     def make_llm_data(self, file_name, save_name, sqlite_info_name="sqlite_info_zh.json"):
@@ -207,20 +306,70 @@ class DusqlDataSet:
             save_name (str): 保存文件名
             sqlite_info_name (str): SQLite信息文件名，默认为"sqlite_info_zh.json"
         """
+        print(f"[DEBUG] 开始处理 {file_name}...")
+        
         llm_data = []
+        
+        # 检查SQLite信息文件是否存在
+        sqlite_info_path = os.path.join(self.home_path, sqlite_info_name)
+        print(f"[DEBUG] SQLite信息文件路径: {sqlite_info_path}")
+        
+        if not os.path.exists(sqlite_info_path):
+            print(f"[ERROR] SQLite信息文件不存在: {sqlite_info_path}")
+            return
+            
         # 加载SQLite信息
-        with open(os.path.join(self.home_path, sqlite_info_name), 'r', encoding="utf-8") as f:
-            sqlite_info = json.load(f)
+        try:
+            with open(sqlite_info_path, 'r', encoding="utf-8") as f:
+                sqlite_info = json.load(f)
+            print(f"[DEBUG] 成功加载SQLite信息，包含 {len(sqlite_info)} 个数据库")
+        except Exception as e:
+            print(f"[ERROR] 加载SQLite信息时出错: {e}")
+            return
         
         # 加载样本数据
-        with open(os.path.join(self.home_path, file_name), 'r', encoding="utf-8") as f:
-            samples = json.load(f)
-            # 处理每个样本
-            for sample in tqdm(samples):
+        sample_path = os.path.join(self.home_path, file_name)
+        print(f"[DEBUG] 样本数据文件路径: {sample_path}")
+        
+        if not os.path.exists(sample_path):
+            print(f"[ERROR] 样本数据文件不存在: {sample_path}")
+            return
+            
+        try:
+            with open(sample_path, 'r', encoding="utf-8") as f:
+                samples = json.load(f)
+            print(f"[DEBUG] 成功加载样本数据，共 {len(samples)} 个样本")
+        except Exception as e:
+            print(f"[ERROR] 加载样本数据时出错: {e}")
+            return
+        
+        # 处理每个样本
+        missing_dbs = []
+        processed_count = 0
+        
+        for sample_idx, sample in enumerate(tqdm(samples, desc=f"处理 {file_name}")):
+            try:
                 db_id = sample['db_id']
                 question = sample['question']
-                sql_query_zh = sample["sql_query"]
-                sqlite_query = sqlite_info[db_id]["sqlite"]
+                sql_query_zh = sample.get("query", "")
+                
+                # 检查数据库是否存在
+                if db_id not in sqlite_info:
+                    missing_dbs.append(db_id)
+                    print(f"[WARNING] 数据库 {db_id} 在SQLite信息中不存在，跳过")
+                    continue
+                    
+                sqlite_query = sqlite_info[db_id].get("sqlite", "")
+                if not sqlite_query:
+                    print(f"[WARNING] 数据库 {db_id} 的SQLite查询为空，跳过")
+                    continue
+                
+                # 调试：打印处理信息
+                if sample_idx < 3:  # 只打印前3个样本
+                    print(f"[DEBUG] 处理样本 {sample_idx+1}:")
+                    print(f"  - db_id: {db_id}")
+                    print(f"  - question: {question[:50]}...")
+                    print(f"  - sqlite_query长度: {len(sqlite_query)}")
                 
                 # 构建提示模板
                 prompt = f"""### Instructions:
@@ -246,10 +395,25 @@ Based on your instructions, here is the SQL query I have generated to answer the
                     "input": prompt,
                     "output": output
                 })
+                processed_count += 1
+                
+            except Exception as e:
+                print(f"[ERROR] 处理样本 {sample_idx+1} 时出错: {e}")
+                continue
+
+        print(f"[DEBUG] 处理完成: 共 {processed_count} 个样本成功处理")
+        if missing_dbs:
+            print(f"[WARNING] 缺失的数据库: {set(missing_dbs)} (共 {len(set(missing_dbs))} 个)")
 
         # 保存处理后的数据
-        with open(os.path.join(self.home_path, save_name), 'w', encoding="utf-8") as fout:
-            fout.writelines("\n".join([json.dumps(one, ensure_ascii=False) for one in llm_data]))
+        save_path = os.path.join(self.home_path, save_name)
+        try:
+            with open(save_path, 'w', encoding="utf-8") as fout:
+                fout.writelines("\n".join([json.dumps(one, ensure_ascii=False) for one in llm_data]))
+            print(f"[DEBUG] 成功保存处理后的数据到: {save_path}")
+            print(f"[DEBUG] 保存了 {len(llm_data)} 个训练样本")
+        except Exception as e:
+            print(f"[ERROR] 保存数据时出错: {e}")
 
 
 def parse_args():
@@ -268,16 +432,37 @@ def parse_args():
 if __name__ == '__main__':
     # 设置默认路径
     home_path = "./dusql/"
-    translation_model_path = ""
+    translation_model_path = "Helsinki-NLP/opus-mt-zh-en"
     
     # 创建数据集处理实例
     data = DusqlDataSet(home_path, translation_model_path)
+
+    # 调用convert_schema_compatible方法将new_schema_en.json转换为符合get_sqlite方法期望的JSONL格式
+    convert_schema_to_jsonl_compatible(os.path.join(home_path, "db_schema.json"), os.path.join(home_path, "db_schema.jsonl"))
     
-    # 获取SQLite模式信息并保存
-    result = data.get_sqlite()
+    # 获取SQLite模式信息并保存(db_schema.jsonl是原始的中文格式，sqlite_info_zh.json是中文的SQLite模式信息)
+    result = data.get_sqlite("db_schema.jsonl")
     with open(os.path.join(home_path, "sqlite_info_zh.json"), 'w', encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False)
     
+    # 调用translate方法对db_schema.json进行中英文转换并保存(new_schema_en.json是英文的模式信息)
+    new_schema_en = data.trans_schema(db_schema_path="db_schema.json")
+    with open(os.path.join(home_path, "new_schema_en.json"), 'w', encoding="utf-8") as f:
+        json.dump(new_schema_en, f, ensure_ascii=False)
+    
+    
     # 生成开发集和训练集数据
-    data.make_llm_data("dev.json", "llm_dev_zh.json")
-    data.make_llm_data("train.json", "llm_train_zh.json")
+    data.make_llm_data("dev.json", "llm_dev_zh.json", sqlite_info_name="sqlite_info_zh.json")
+    data.make_llm_data("train.json", "llm_train_zh.json", sqlite_info_name="sqlite_info_zh.json")
+    
+    # # 调用convert_schema_compatible方法将new_schema_en.json转换为符合get_sqlite方法期望的JSONL格式
+    # convert_schema_to_jsonl_compatible(os.path.join(home_path, "new_schema_en.json"), os.path.join(home_path, "new_schema_en.jsonl"))
+    
+    # # 获取SQLite模式信息并保存
+    # result = data.get_sqlite("new_schema_en.jsonl")
+    # with open(os.path.join(home_path, "sqlite_info_en.json"), 'w', encoding="utf-8") as f:
+    #     json.dump(result, f, ensure_ascii=False)
+    
+    # # 生成英文的开发集和训练集数据
+    # data.make_llm_data("dev.json", "llm_dev_en.json", sqlite_info_name="sqlite_info_en.json")
+    # data.make_llm_data("train.json", "llm_train_en.json", sqlite_info_name="sqlite_info_en.json")
