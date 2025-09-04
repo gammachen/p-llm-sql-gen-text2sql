@@ -96,9 +96,13 @@ class DusqlDataSet:
             return type_dict[col_type]
         return "VARCHAR(50)"
 
-    def get_sqlite(self, new_schema_path: str = "new_schema.jsonl"):
+    def get_sqlite(self, new_schema_path: str = "new_schema.jsonl", use_english: bool = False):
         """
         从new_schema.jsonl文件中读取并生成SQLite数据库模式
+        
+        Args:
+            new_schema_path: JSONL文件路径
+            use_english: 是否使用英文生成DDL语句（True=英文表名和列名，False=中文表名和列名，默认False）
         
         Returns:
             dict: 以数据库ID为键，包含sqlite模式、列英文名和表英文名的字典
@@ -117,21 +121,42 @@ class DusqlDataSet:
                 # 处理每个表的结构信息
                 for table_name, columns in sample["table_info"].items():
                     is_first = True
+                    
+                    # 根据use_english参数选择表名
+                    if use_english and table_name in table_en:
+                        table_name_display = table_en[table_name]
+                        table_name_display = " ".join(table_name_display.split("_"))
+                    else:
+                        table_name_display = table_name
+                    
                     # 构建CREATE TABLE语句头部
-                    table_info = f"CREATE TABLE {table_name} "
+                    table_info = f"CREATE TABLE {table_name_display} "
                     column_info = []
+                    
                     # 处理每个列的信息
                     for column in columns:
                         column_name_zh, column_type = column
-                        column_name_en = columns_en[column_name_zh]
-                        column_name_en = " ".join(column_name_en.split("_"))
+                        
+                        # 根据use_english参数选择列名
+                        if use_english and column_name_zh in columns_en:
+                            column_name_display = columns_en[column_name_zh]
+                            column_name_display = " ".join(column_name_display.split("_"))
+                            column_comment = column_name_zh  # 中文作为注释
+                        else:
+                            column_name_display = column_name_zh
+                            column_comment = columns_en.get(column_name_zh, column_name_zh)
+                            if column_comment != column_name_zh:
+                                column_comment = " ".join(column_comment.split("_"))
+                        
                         column_sql_type = self.get_column_types(column_type)
+                        
                         # 为第一列设置为主键
                         if is_first:
-                            column_info.append(f"  {column_name_zh} {column_sql_type} PRIMARY KEY, -- {column_name_en}")
+                            column_info.append(f"  {column_name_display} {column_sql_type} PRIMARY KEY, -- {column_comment}")
                             is_first = False
                         else:
-                            column_info.append(f"  {column_name_zh} {column_sql_type}, -- {column_name_en}")
+                            column_info.append(f"  {column_name_display} {column_sql_type}, -- {column_comment}")
+                    
                     # 组合完整的表创建语句
                     one_table_info = table_info + "(\n" + "\n".join(column_info) + "\n);"
                     whole_sql_info.append(one_table_info)
@@ -142,10 +167,37 @@ class DusqlDataSet:
                     a, b = one_join
                     table_name_zh_a, column_name_zh_a = a[0], a[1]
                     table_name_zh_b, column_name_zh_b = b[0], b[1]
+                    
+                    # 根据use_english参数选择关联关系的显示
+                    if use_english:
+                        table_display_a = table_en.get(table_name_zh_a, table_name_zh_a)
+                        table_display_a = " ".join(table_display_a.split("_"))
+                        column_display_a = columns_en.get(column_name_zh_a, column_name_zh_a)
+                        column_display_a = " ".join(column_display_a.split("_"))
+                        
+                        table_display_b = table_en.get(table_name_zh_b, table_name_zh_b)
+                        table_display_b = " ".join(table_display_b.split("_"))
+                        column_display_b = columns_en.get(column_name_zh_b, column_name_zh_b)
+                        column_display_b = " ".join(column_display_b.split("_"))
+                        
+                        comment_a = f"{table_name_zh_a}.{column_name_zh_a}"
+                        comment_b = f"{table_name_zh_b}.{column_name_zh_b}"
+                    else:
+                        table_display_a, column_display_a = table_name_zh_a, column_name_zh_a
+                        table_display_b, column_display_b = table_name_zh_b, column_name_zh_b
+                        comment_a = columns_en.get(column_name_zh_a, column_name_zh_a)
+                        comment_b = columns_en.get(column_name_zh_b, column_name_zh_b)
+                        if comment_a != column_name_zh_a:
+                            comment_a = " ".join(comment_a.split("_"))
+                        if comment_b != column_name_zh_b:
+                            comment_b = " ".join(comment_b.split("_"))
+                    
                     # 添加关联关系的注释说明
-                    one_join_info = f"-- {table_name_zh_a}.{column_name_zh_a} can be joined with {table_name_zh_b}.{table_name_zh_b}"
+                    one_join_info = f"-- {table_display_a}.{column_display_a} can be joined with {table_display_b}.{column_display_b} -- {comment_a} 与 {comment_b}"
                     joined_part.append(one_join_info)
+                
                 whole_sql_info.append("\n".join(joined_part))
+                
                 # 将处理结果保存到结果字典中
                 result[db_id] = {
                     "sqlite": "\n".join(whole_sql_info), 
@@ -437,32 +489,40 @@ if __name__ == '__main__':
     # 创建数据集处理实例
     data = DusqlDataSet(home_path, translation_model_path)
 
-    # 调用convert_schema_compatible方法将new_schema_en.json转换为符合get_sqlite方法期望的JSONL格式
+    # 处理中文模式：使用中文表名和列名
+    print("[INFO] 开始处理中文模式...")
     convert_schema_to_jsonl_compatible(os.path.join(home_path, "db_schema.json"), os.path.join(home_path, "db_schema.jsonl"))
     
-    # 获取SQLite模式信息并保存(db_schema.jsonl是原始的中文格式，sqlite_info_zh.json是中文的SQLite模式信息)
-    result = data.get_sqlite("db_schema.jsonl")
+    # 获取SQLite模式信息并保存(中文模式)
+    result = data.get_sqlite("db_schema.jsonl", use_english=False)
     with open(os.path.join(home_path, "sqlite_info_zh.json"), 'w', encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False)
     
-    # 调用translate方法对db_schema.json进行中英文转换并保存(new_schema_en.json是英文的模式信息)
+    # 生成中文的开发集和训练集数据
+    data.make_llm_data("dev.json", "llm_dev_zh.json", sqlite_info_name="sqlite_info_zh.json")
+    data.make_llm_data("train.json", "llm_train_zh.json", sqlite_info_name="sqlite_info_zh.json")
+
+    # 处理英文模式：使用英文表名和列名，但保留中文注释
+    print("[INFO] 开始处理英文模式...")
+    
+    # 调用translate方法对db_schema.json进行中英文转换并保存
     new_schema_en = data.trans_schema(db_schema_path="db_schema.json")
     with open(os.path.join(home_path, "new_schema_en.json"), 'w', encoding="utf-8") as f:
         json.dump(new_schema_en, f, ensure_ascii=False)
     
+    # 调用convert_schema_compatible方法将new_schema_en.json转换为符合get_sqlite方法期望的JSONL格式
+    convert_schema_to_jsonl_compatible(os.path.join(home_path, "new_schema_en.json"), os.path.join(home_path, "new_schema_en.jsonl"))
     
-    # 生成开发集和训练集数据
-    data.make_llm_data("dev.json", "llm_dev_zh.json", sqlite_info_name="sqlite_info_zh.json")
-    data.make_llm_data("train.json", "llm_train_zh.json", sqlite_info_name="sqlite_info_zh.json")
+    # 获取SQLite模式信息并保存(英文模式)
+    result = data.get_sqlite("new_schema_en.jsonl", use_english=True)
+    with open(os.path.join(home_path, "sqlite_info_en.json"), 'w', encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False)
     
-    # # 调用convert_schema_compatible方法将new_schema_en.json转换为符合get_sqlite方法期望的JSONL格式
-    # convert_schema_to_jsonl_compatible(os.path.join(home_path, "new_schema_en.json"), os.path.join(home_path, "new_schema_en.jsonl"))
+    # 生成英文的开发集和训练集数据
+    data.make_llm_data("dev.json", "llm_dev_en.json", sqlite_info_name="sqlite_info_en.json")
+    data.make_llm_data("train.json", "llm_train_en.json", sqlite_info_name="sqlite_info_en.json")
     
-    # # 获取SQLite模式信息并保存
-    # result = data.get_sqlite("new_schema_en.jsonl")
-    # with open(os.path.join(home_path, "sqlite_info_en.json"), 'w', encoding="utf-8") as f:
-    #     json.dump(result, f, ensure_ascii=False)
-    
-    # # 生成英文的开发集和训练集数据
-    # data.make_llm_data("dev.json", "llm_dev_en.json", sqlite_info_name="sqlite_info_en.json")
-    # data.make_llm_data("train.json", "llm_train_en.json", sqlite_info_name="sqlite_info_en.json")
+    print("[INFO] 中英文模式处理完成！")
+    print("[INFO] 生成的文件:")
+    print("  - 中文模式: sqlite_info_zh.json, llm_dev_zh.json, llm_train_zh.json")
+    print("  - 英文模式: sqlite_info_en.json, llm_dev_en.json, llm_train_en.json")
