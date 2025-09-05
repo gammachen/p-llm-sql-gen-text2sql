@@ -1,0 +1,47 @@
+[
+  {
+    "test_case": 1,
+    "question": "按离异时间从远到近，都有哪些明星离婚了？",
+    "actual_output": "```SQL\nSELECT  Star.*, divorcing_star.Departure time FROM A AS divorce INNER JOIN Star ON dividiong star .Starid = Start id WHERE DATEDIFF(DIVORCING STAR , now()) >= 10;   -- replace 'now()' with the current date if you want all records sorted by default\n```  (Note: SQL syntax might vary based on your database. The query is written for a sqlite compatible DBMS)",
+    "expected_output": "select Starid from 离异Star order by Departure_time asc",
+    "score": 0.5,
+    "comment": "部分匹配 - 包含主要 SQL 关键词",
+    "time": 2.8683719635009766
+  },
+  {
+    "test_case": 2,
+    "question": "哪些明星在2002年之前离婚的？",
+    "actual_output": "```SQL \nSELECT S1.*, C2.Starid AS couple_starid ,C3.\"Departure time\" as divorce_time FROM Star AS S1  \nINNER JOIN ( SELECT * from A divorcing star )AS C2 ON S1.Phrase id=C2 .Spouse ID  -- type of left join based on requirement, INNER or LEFT/RIGHT if needed   \nLEFT OUTER JOIN \"Star couple\" AS C3 ON S1.\"starid\" = C3..'time_of_marriage';   --- change 'start id', ''divorce time'' and  '''Time of marriage''' to your real column names. This is a LEFT join as it will include all records from the left table (Star), even if there are no matches in the right side ('A divorcing star')\nWHERE S1.\"time_of_graduation\" < '2003';  -- change this time to your actual column names. This is a condition based on requirement, replace it with an appropriate one according to requirements of database schema and table name if needed    .  ```SQL's should be done in the same sql dialect as you use for creating tables (like SQLite or MySQL)\n}-  } -- end first query block {--. If your DBMS supports multi-line queries, this could look different based on which one is used to create and run these blocks of code .In case it's not a supported by the type mentioned above(SQL Server). In that situation you would wrap each SQL statement in braces `{}` or use other appropriate syntax.",
+    "expected_output": "select Starid from 离异Star where Departure_time < 2002",
+    "score": 0.5,
+    "comment": "部分匹配 - 包含主要 SQL 关键词",
+    "time": 3.296358823776245
+  },
+  {
+    "test_case": 3,
+    "question": "按冠军次数从多到少，给出各球员的id",
+    "actual_output": "```SQL \nSELECT player_id, COUNT(champions) as champion_counts FROM (\n    SELECT gold_medal_recipient AS player_id , game_name from It's an important event  \n        UNION ALL      \n    SELECT copper_card_laureateId as player_id  , olympic_games.title of the project as game_name FROM The Olympic champions INNER JOIN Badminton Player ON Copper Card Laureates Id = Phrase id    \n) subquery GROUP BY champion_counts,player_ID ORDER By champion_count DES;   \n```  (This query assumes that 'It's an important event', and it refers to the table of `重要赛事`.) This SQL statement will join two tables: It’s An Important Event(represented as a) with Badminton Player on Copper Card Laureate Id = Phrase id, then aggregate data by champion count. Finally order them from high-to-low counts and select player_id of each record that has the maximum number of champions participated in (champion_counts).",
+    "expected_output": "select Player_id from Number_of_champions order by Number_of_champions desc",
+    "score": 0.5,
+    "comment": "部分匹配 - 包含主要 SQL 关键词",
+    "time": 3.0139241218566895
+  },
+  {
+    "test_case": 4,
+    "question": "获得冠军次数升序排前3，或者亚军次数降序排前5的都是哪些羽毛球运动员？",
+    "actual_output": "```SQL \nSELECT BP.*, NC1.Number_of_champions AS CHAMPIONS FROM BadmintonPlayer as BP INNER JOIN NumberOfChampions as NC ON BP.PhraseId = NC.GameID LEFT JOIN ( SELECT Phraseid , COUNT(DISTINCT GoldMedalRecipient) \nAS ChampionCounts from TheOlympicChampions GROUP BY Title ORDER BY Count DESC LIMIT  3 ) AS GC on Gc .Title  = BP.title and gmrc not null AND NC1.Number_of_champions = CHAMPIONS WHERE SILVERCardWinnerid is NOT NULL OR COPPERLaureateId \nNOT IN (SELECT PhraseID from NumberOfChampions where Title='Summer Olympics') ORDER BY ChampionCounts DESC, GC2 .CHAMPIONSCount ASC LIMIT  5;",
+    "expected_output": "( select Player_id from Number_of_champions order by Number_of_champions asc limit 3 ) union ( select Player_id from Number_of_champions order by Number_of_military_units desc limit 5 )",
+    "score": 0.5,
+    "comment": "部分匹配 - 包含主要 SQL 关键词",
+    "time": 2.13315486907959
+  },
+  {
+    "test_case": 5,
+    "question": "找到得冠超过12次的球员夺冠次数，但是不包含亚军次数最少的3个球员id",
+    "actual_output": "SELECT bp1_.Phrase_id, ncc2_.Country_Name  -- only for clarity in join condition of Badminton player and Country Name table are used aliases here as they're not necessary to answer this particular query without them specified below. In the main part I have replaced it with meaningful names\nFROM (Badminton bp1_, A_champion c2_) -- replace these according your database schema name,  Badminton is from It’s an important event table and player id corresponds here in a way that suits to this question's need. In the main part I have replaced it with meaningful names\nWHERE (bp1_.Phrase_id = ncc2_.Game_Id) AND ((SELECT COUNT(*) FROM NumberOfChampions WHERE Player_ID=c2_.Player_Name and Game_ID in  -- replace 'Numberofchampion' here as the question asks for more than one champion count, not only champions.\n    (Select Phrase id from It’s an important event where The crowd = c2_.Country Name))>1 AND NOT EXISTS(SELECT * FROM NumberOfChampions WHERE Player_ID=bp1_.Phraseid and GameId in -- replace 'Numberofchampion' here as the question asks for more than one champion count, not only champions.\n        (Select Phrase id from It’s an important event where The crowd = c2_.Country Name)))>=3; \n```  \nThis SQL query is looking at all players who have won over two medals in a competition and are neither the first nor second loser of their team among champions. Note that this assumes there're no ties for gold, silver or bronze medal recipients as mentioned above - if you meant to find 'champions', those would require separate queries based on where they fall into groups (Gold/Silver/Bronze).",
+    "expected_output": "( select Player_id from Number_of_champions where Number_of_champions > 12 ) except ( select Player_id from Number_of_champions order by Number_of_military_units asc limit 3 )",
+    "score": 0.5,
+    "comment": "部分匹配 - 包含主要 SQL 关键词",
+    "time": 4.150923013687134
+  }
+]
