@@ -1,0 +1,101 @@
+[
+    {
+        "query": "select 中文名 , 场上位置 from 篮球运动员 where 词条id not in ( select 球员id from 比赛记录 )", 
+        "db_id": "运动员比赛记录", 
+        "question": "没有比赛记录的篮球运动员有哪些，同时给出他们在球场上位于哪个位置？", 
+        "question_id": "qid000001", 
+        "sql": {
+            "orderBy": [], 
+            "from": {
+                "table_units": [
+                    [
+                        "table_unit", 
+                        0
+                    ]
+                ], 
+                "conds": []
+            }, 
+            "union": null, 
+            "except": null, 
+            "having": [], 
+            "limit": null, 
+            "intersect": null, 
+            "where": [
+                [
+                    0, 
+                    0, 
+                    [
+                        0, 
+                        [
+                            0, 
+                            1, 
+                            false
+                        ], 
+                        null
+                    ], 
+                    {
+                        "orderBy": [], 
+                        "from": {
+                            "table_units": [
+                                [
+                                    "table_unit", 
+                                    1
+                                ]
+                            ], 
+                            "conds": []
+                        }, 
+                        "union": null, 
+                        "except": null, 
+                        "having": [], 
+                        "limit": null, 
+                        "intersect": null, 
+                        "where": [], 
+                        "groupBy": [], 
+                        "select": [
+                            [
+                                0, 
+                                [
+                                    0, 
+                                    [
+                                        0, 
+                                        9, 
+                                        false
+                                    ], 
+                                    null
+                                ]
+                            ]
+                        ]
+                    }, 
+                    null
+                ]
+            ], 
+            "groupBy": [], 
+            "select": [
+                [
+                    0, 
+                    [
+                        0, 
+                        [
+                            0, 
+                            2, 
+                            false
+                        ], 
+                        null
+                    ]
+                ], 
+                [
+                    0, 
+                    [
+                        0, 
+                        [
+                            0, 
+                            3, 
+                            false
+                        ], 
+                        null
+                    ]
+                ]
+            ]
+        }
+    }
+]

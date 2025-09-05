@@ -349,6 +349,45 @@ class DusqlDataSet:
         print(f"[DEBUG] 转换完成，共处理 {len(new_schema)} 个数据库")
         return new_schema
 
+    def translate_sql_query(self, sql_query, columns_en, table_en):
+        """
+        将SQL查询中的中文字段名和表名替换为英文
+        
+        Args:
+            sql_query (str): 原始的中文SQL查询
+            columns_en (dict): 列名的中英文映射关系
+            table_en (dict): 表名的中英文映射关系
+            
+        Returns:
+            str: 替换后的英文SQL查询
+        """
+        if not sql_query:
+            return sql_query
+            
+        translated_query = sql_query
+        
+        # 先替换表名（避免表名被包含在列名中）
+        for zh_table, en_table in table_en.items():
+            # 使用下划线格式的英文表名
+            en_table_formatted = en_table
+            # 替换表名（考虑表名可能被引号包围的情况）
+            translated_query = translated_query.replace(f"`{zh_table}`", en_table_formatted)
+            translated_query = translated_query.replace(f"'{zh_table}'", en_table_formatted)
+            translated_query = translated_query.replace(f'"{zh_table}"', en_table_formatted)
+            translated_query = translated_query.replace(zh_table, en_table_formatted)
+        
+        # 再替换列名
+        for zh_column, en_column in columns_en.items():
+            # 使用下划线格式的英文列名
+            en_column_formatted = en_column
+            # 替换列名（考虑列名可能被引号包围的情况）
+            translated_query = translated_query.replace(f"`{zh_column}`", en_column_formatted)
+            translated_query = translated_query.replace(f"'{zh_column}'", en_column_formatted)
+            translated_query = translated_query.replace(f'"{zh_column}"', en_column_formatted)
+            translated_query = translated_query.replace(zh_column, en_column_formatted)
+            
+        return translated_query
+
     def make_llm_data(self, file_name, save_name, sqlite_info_name="sqlite_info_zh.json"):
         """
         生成用于大语言模型训练的数据
@@ -412,15 +451,23 @@ class DusqlDataSet:
                     continue
                     
                 sqlite_query = sqlite_info[db_id].get("sqlite", "")
+                columns_en = sqlite_info[db_id].get("columns_en", {})
+                table_en = sqlite_info[db_id].get("table_en", {})
+                
                 if not sqlite_query:
                     print(f"[WARNING] 数据库 {db_id} 的SQLite查询为空，跳过")
                     continue
+                
+                # 将SQL查询中的中文字段替换为英文
+                sql_query_en = self.translate_sql_query(sql_query_zh, columns_en, table_en)
                 
                 # 调试：打印处理信息
                 if sample_idx < 3:  # 只打印前3个样本
                     print(f"[DEBUG] 处理样本 {sample_idx+1}:")
                     print(f"  - db_id: {db_id}")
                     print(f"  - question: {question[:50]}...")
+                    print(f"  - 原始SQL: {sql_query_zh[:100]}...")
+                    print(f"  - 英文SQL: {sql_query_en[:100]}...")
                     print(f"  - sqlite_query长度: {len(sqlite_query)}")
                 
                 # 构建提示模板
@@ -441,7 +488,7 @@ Based on your instructions, here is the SQL query I have generated to answer the
 ```sql
 """
 
-                output = sql_query_zh
+                output = sql_query_en  # 使用英文SQL查询
                 # 将输入输出对添加到训练数据中
                 llm_data.append({
                     "input": prompt,
@@ -526,3 +573,17 @@ if __name__ == '__main__':
     print("[INFO] 生成的文件:")
     print("  - 中文模式: sqlite_info_zh.json, llm_dev_zh.json, llm_train_zh.json")
     print("  - 英文模式: sqlite_info_en.json, llm_dev_en.json, llm_train_en.json")
+    
+    # 以美化后的形式输出llm_dev_en.json, llm_train_en.json中的第一行json结构的数据
+    with open(os.path.join(home_path, "llm_dev_en.json"), 'r', encoding="utf-8") as f:
+        first_line = json.loads(f.readline())
+        print(json.dumps(first_line, ensure_ascii=False, indent=2))
+    
+    with open(os.path.join(home_path, "llm_train_en.json"), 'r', encoding="utf-8") as f:
+        first_line = json.loads(f.readline())
+        print(json.dumps(first_line, ensure_ascii=False, indent=2))
+    
+    # 执行这段python脚本：python /Users/shhaofu/Code/cursor-projects/p-some-scripts/print.py /Users/shhaofu/Code/cursor-projects/p-llm-sql-gen-text2sql/finetune/train_deepseek.py
+    from print import slow_print_file
+    
+    slow_print_file("../finetune/train_deepseek.py")

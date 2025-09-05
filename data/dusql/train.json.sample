@@ -1,0 +1,96 @@
+[
+    {
+        "query": "select 明星id from 离异明星 order by 离异时间 asc", 
+        "db_id": "明星关系", 
+        "question": "按离异时间从远到近，都有哪些明星离婚了？", 
+        "sql": {
+            "orderBy": [
+                "asc", 
+                [
+                    [
+                        0, 
+                        [
+                            0, 
+                            [
+                                0, 
+                                12, 
+                                false
+                            ], 
+                            null
+                        ]
+                    ]
+                ]
+            ], 
+            "from": {
+                "table_units": [
+                    [
+                        "table_unit", 
+                        2
+                    ]
+                ], 
+                "conds": []
+            }, 
+            "union": null, 
+            "except": null, 
+            "groupBy": [], 
+            "limit": null, 
+            "intersect": null, 
+            "where": [], 
+            "having": [], 
+            "select": [
+                [
+                    0, 
+                    [
+                        0, 
+                        [
+                            0, 
+                            10, 
+                            false
+                        ], 
+                        null
+                    ]
+                ]
+            ]
+        }, 
+        "question_id": "qid000001"
+    },
+    {
+        "query": "select sum ( 货邮运输量 ) from 民航运输货物", 
+        "db_id": "交通运输", 
+        "question": "给出最近这些年民航运输货物总量", 
+        "question_id": "qid007611", 
+        "sql": {
+            "orderBy": [], 
+            "from": {
+                "table_units": [
+                    [
+                        "table_unit", 
+                        4
+                    ]
+                ], 
+                "conds": []
+            }, 
+            "union": null, 
+            "except": null, 
+            "having": [], 
+            "limit": null, 
+            "intersect": null, 
+            "where": [], 
+            "groupBy": [], 
+            "select": [
+                [
+                    4, 
+                    [
+                        0, 
+                        [
+                            0, 
+                            31, 
+                            false
+                        ], 
+                        null
+                    ]
+                ]
+            ]
+        }
+    }
+]

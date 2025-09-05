@@ -97,6 +97,66 @@ unzip DuSQL.zip >/dev/null
 4 directories, 25 files
 ```
 
+### 数据样例
+
+```json
+{
+    "db_id": "69cc8c0c334311e98692542696d6e445",
+    "question": "2011年平均每天成交3.17的长沙在最近一个星期成交了多少",
+    "question_id": "qid2",
+    "sql": {
+        "agg": [
+            0
+        ],
+        "cond_conn_op": 1,
+        "sel": [
+            6
+        ],
+        "conds": [
+            [
+                2,
+                2,
+                "3.17"
+            ],
+            [
+                1,
+                2,
+                "长沙"
+            ]
+        ]
+    },
+    "query": "SELECT 近7日成交 WHERE 2011年日均成交 == \"3.17\" and 城市 == \"长沙\""
+},
+{
+    "db_id": "4d258a053aaa11e994c3f40f24344a08",
+    "question": "请问 一下搜房网和人人网的周涨跌幅分别是多少",
+    "question_id": "qid7",
+    "sql": {
+        "agg": [
+            0
+        ],
+        "cond_conn_op": 2,
+        "sel": [
+            5
+        ],
+        "conds": [
+            [
+                2,
+                2,
+                "搜房网"
+            ],
+            [
+                2,
+                2,
+                "人人网"
+            ]
+        ]
+    },
+    "query": "SELECT 周涨跌幅 WHERE 名称 == \"搜房网\" or 名称 == \"人人网\""
+}
+```
+
+
 ## 核心流程详解
 
 ### 1. 数据处理流程
@@ -170,15 +230,8 @@ This query will run on a database whose schema is represented in this string:
 
 ### Response:
 Based on your instructions, here is the SQL query I have generated to answer the question `{question}`:
-```sql
-"""
 
-            output = sql_query_zh
-            # 将输入输出对添加到训练数据中
-            llm_data.append({
-                "input": prompt,
-                "output": output
-            })
+"""            
 ```
 
 ### 数据处理执行
@@ -304,5 +357,3 @@ python3 predict.py --model_path "your_model_path"
 2. **中英文翻译**：通过翻译服务处理中文字段名，提高模型理解能力
 3. **高效微调**：采用LoRA技术进行参数高效微调，降低计算资源需求
 4. **完整流程**：提供从数据处理到模型推理的端到端解决方案
-
-项目中的代码包含详细的注释信息，帮助读者更容易地阅读代码、理解其原理。读者跑通代码后，可以根据自己特定的任务，定向修改配置参数或代码，实现相应的功能。
